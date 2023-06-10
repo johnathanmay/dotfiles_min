@@ -31,7 +31,13 @@
 
 - shell: 
     - [git submodule update --init --recursive, INSTALLING submodules]
-    - ["if [ ! -d oh-my-zsh/custom/themes/powerlevel10k ]; then git clone https://github.com/romkatv/powerlevel10k.git ./oh-my-zsh/custom/themes/powerlevel10k; else cd oh-my-zsh/custom/themes/powerlevel10k; git pull; fi", CLONING oh-my-zsh powerlevel10k theme ]
+    - ["if [ ! -d oh-my-zsh ]; then git submodule add https://github.com/ohmyzsh/ohmyzsh.git oh-my-zsh; fi", CLONING oh-my-zsh]
+    - ["if [ ! -d oh-my-zsh/custom/themes/powerlevel10k ]; then git clone https://github.com/romkatv/powerlevel10k.git ./oh-my-zsh/custom/themes/powerlevel10k; else cd oh-my-zsh/custom/themes/powerlevel10k; git pull; fi", CLONING oh-my-zsh powerlevel10k theme]
     - ["if [ ! -d oh-my-zsh/custom/plugins/zsh-autosuggestions ]; then git clone https://github.com/zsh-users/zsh-autosuggestions.git ./oh-my-zsh/custom/plugins/zsh-autosuggestions; else cd ./oh-my-zsh/custom/plugins/zsh-autosuggestions; git pull; fi", CLONING zsh autosuggestions]
     - ["if [ ! -d oh-my-zsh/custom/plugins/zsh-syntax-highlighting ]; then git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ./oh-my-zsh/custom/plugins/zsh-syntax-highlighting; else cd ./oh-my-zsh/custom/plugins/zsh-syntax-highlighting; git pull; fi", CLONING zsh syntax highlighting]
+    - ["if [ ! -d vim/pack/vendor/start/vim-airline ]; then git submodule add https://github.com/vim-airline/vim-airline.git vim/pack/vendor/start/vim-airline; fi", CLONING vim/pack/vendor/start/vim-airline]
+    - ["if [ ! -d vim/pack/vendor/start/nginx ]; then git submodule add https://github.com/chr4/nginx.vim.git vim/pack/vendor/start/nginx; fi", CLONING vim/pack/vendor/start/nginx]
+    - ["if [ ! -d vim/pack/vendor/start/vim-terraform ]; then git submodule add https://github.com/hashivim/vim-terraform.git vim/pack/vendor/start/vim-terraform; fi", CLONING vim/pack/vendor/start/vim-terraform]
+    - ["if [ ! -d vim/pack/vendor/start/vim-tmux ]; then git submodule add https://github.com/tmux-plugins/vim-tmux.git vim/pack/vendor/start/vim-tmux; fi", CLONING vim/pack/vendor/start/vim-tmux]
+    - ["if [ ! -d vim/pack/vendor/start/vim-ps1 ]; then git submodule add https://github.com/PProvost/vim-ps1.git vim/pack/vendor/start/vim-ps1; fi", CLONING vim/pack/vendor/start/vim-ps1]
     - [git submodule update --remote, UPDATING submodules]
