@@ -1,0 +1,51 @@
+{
+    "editor.suggestSelection": "first",
+    "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
+    "C_Cpp.updateChannel": "Insiders",
+    "sonarlint.ls.javaHome": "/usr/lib/jvm/temurin-17-jdk-amd64/",
+    "workbench.editorAssociations": {
+        "*.ipynb": "jupyter-notebook"
+    },
+    "python.languageServer": "Pylance",
+    "java.home": "/usr/lib/jvm/default-java",
+    "files.exclude": {
+        "**/.classpath": true,
+        "**/.project": true,
+        "**/.settings": true,
+        "**/.factorypath": true
+    },
+    "redhat.telemetry.enabled": true,
+    "notebook.cellToolbarLocation": {
+        "default": "right",
+        "jupyter-notebook": "left"
+    },
+    "editor.multiCursorModifier": "ctrlCmd",
+    "terminal.integrated.fontFamily": "Roboto Mono for Powerline",
+    "window.autoDetectColorScheme": true,
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+              "scope": "heading.1.markdown entity.name.section.markdown, heading.1.markdown punctuation.definition.heading.markdown",
+              "settings": {
+                  "foreground": "#04d5fa",
+                  "fontStyle": "bold",
+              }
+          },
+          {
+              "scope": "heading.2.markdown entity.name.section.markdown, heading.2.markdown punctuation.definition.heading.markdown",
+              "settings": {
+                  "foreground": "#a74fcf",
+              }
+           },
+           {
+            "scope": "heading.3.markdown entity.name.section.markdown, heading.3.markdown punctuation.definition.heading.markdown",
+            "settings": {
+                "foreground": "#00b7ff",
+            }
+         }
+        ]
+    },
+    "[python]": {
+        "editor.formatOnType": true
+    }
+}

@@ -1,0 +1,108 @@
+##############################
+# SYSTEM UTILITIES
+##############################
+
+# these two functions could be aliases but currently something in the standard
+# oh-my-zsh config is preventing tab completion from working with `diff`
+
+# show diff color=always, side-by-side, max width
+jdiff () {
+    diff -yw -W $(tput cols) --color=always $*
+}
+
+# show diff color=always, side-by-side, max width, suppress common
+jdiffs () {
+    diff -yw -W $(tput cols) --color=always --suppress-common-lines $*
+}
+
+# list directory sorted in reverse timestamp in human long format
+alias ltr='ls -lhrt'
+
+# ssh to libvirt nodes by name
+jmssh () {
+    if grep -q "$1" $HOME/.ssh/jm_ssh_list.json; then
+        ssh_port=`jq -r ".\"${1}\".port" $HOME/.ssh/jm_ssh_list.json`
+        ssh_host=`jq -r ".\"${1}\".host" $HOME/.ssh/jm_ssh_list.json`
+        echo "ssh -p$ssh_port $ssh_host ${@:3}"
+        ssh -p$ssh_port $ssh_host "${@:3}"
+    else
+        ssh "$@"
+    fi
+}
+
+##############################
+# KUBERNETES
+##############################
+
+# kubectl exec pod by namespace: kce pod namespace shell
+#
+# --stdin and --tty default to false, but calling the flags without
+# a boolean argument results in making them set to true
+# --stdin == --stdin=true == -i
+# --tty == --tty=true == -t
+kce () {
+    if [ -z "$1" ]; then
+        echo "  usage: $0 pod_name [namespace] [shell]"
+        return 1
+    fi
+    
+    local KUB_HOST="$1"
+    shift
+    local NAMESPACE=default
+    local KUB_SHELL=bash
+    
+    if [ "$#" -ge 2 ]; then
+        local NAMESPACE="$1"
+        shift
+        local KUB_SHELL="$1"
+        shift
+    elif [ "$#" -eq 1 ]; then
+        if [[ "$1" == "sh" ]] || [[ "$1" == "bash" ]] || [[ "$1" == "zsh" ]]; then
+            local KUB_SHELL="$1"
+        else
+            local NAMESPACE="$1"
+        fi
+    fi
+    
+    kubectl exec -it $KUB_HOST -n $NAMESPACE -- $KUB_SHELL $*
+}
+
+# this doesn't work yet
+#kcec () {
+#    if [ -z "$1" ]; then
+#        echo "  usage: $0 pod namespace shell"
+#        return 1
+#    fi
+#    
+#    local KUB_HOST="$1"
+#    shift
+#    local NAMESPACE=default
+#    local KUB_SHELL=bash
+#    
+#    if [ "$#" -ge 2 ]; then
+#        local NAMESPACE="$1"
+#        shift
+#        local KUB_SHELL="$1"
+#        shift
+#    elif [ "$#" -eq 1 ]; then
+#        if [[ "$1" == "sh" ]] || [[ "$1" == "bash" ]] || [[ "$1" == "zsh" ]]; then
+#            local KUB_SHELL="$1"
+#        else
+#            local NAMESPACE="$1"
+#        fi
+#    fi
+#    
+#    kubectl exec $KUB_HOST -n $NAMESPACE -- $KUB_SHELL "$*"
+#}
+
+# kubectl get nodes include node role
+alias kcgn='kubectl get nodes --sort-by={.metadata.creationTimestamp} -L role'
+
+# kubectl get pods sorted by age
+alias kcgp='kubectl get pods --sort-by={.metadata.creationTimestamp}'
+
+# kubectl get pods on specific node
+kcgpn () {
+    kubectl get pods --sort-by={.metadata.creationTimestamp} --field-selector spec.nodeName=$*
+}
+

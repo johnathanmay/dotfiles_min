@@ -1,0 +1,21 @@
+#!/bin/bash
+
+VM_TEMPLATE_NAME=$1
+VM_NAME=$2
+
+echo "Running virt-clone"
+virt-clone --original $VM_TEMPLATE_NAME --name $VM_NAME --file /var/lib/libvirt/images/$VM_NAME.qcow2
+
+echo "Running virt-sysprep"
+sudo virt-sysprep -x -d $VM_NAME --keep-user-accounts jlm --enable net-hwaddr,net-hostname,bash-history,ssh-hostkeys,tmp-files,utmp,udev-persistent-net,dhcp-client-state,user-account,machine-id 2> /dev/null
+
+echo "Running virt-customize"
+#virt-customize -a /var/lib/libvirt/images/$VM_NAME.qcow2 --hostname $VM_NAME --firstboot-command "ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa" --firstboot-command "ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa -b 521" --firstboot-command "ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519" --firstboot-command "systemctl restart ssh"
+sudo virt-customize -a /var/lib/libvirt/images/$VM_NAME.qcow2 --hostname $VM_NAME --firstboot-command "dpkg-reconfigure openssh-server"
+
+#echo "Running virt-sparsify"
+#sudo virt-sparsify /var/lib/libvirt/images/$VM_NAME.qcow2 /var/lib/libvirt/images/$VM_NAME.qcow2.sparse
+#sudo mv /var/lib/libvirt/images/$VM_NAME.qcow2{.sparse,}
+#sudo chown $USER.$USER /var/lib/libvirt/images/$VM_NAME.qcow2
+
+

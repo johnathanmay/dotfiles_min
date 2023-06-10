@@ -1,0 +1,140 @@
+#!/usr/bin/env zsh
+
+# set -x
+
+local cwd=$(pwd)
+local kernel=$(uname | tr '[:upper:]' '[:lower:]') 
+local go_ver_home="$HOME/.go_versions"
+local go_bin="$HOME/go/bin"
+local go_dl_url="https://go.dev/dl/"
+
+local usage="""
+  
+  Display this help/usage by running $0 -h
+  
+  Install versions of go to $go_ver_home from the current go downloads
+  list or by specifying a version. Examples:
+
+    - $0
+    - $0 1.20.1
+  
+  Remove versions of go from $go_ver_home from the installed list or
+  by specifying a version. Examples:
+
+    - $0 -r
+    - $0 -r 1.17.3
+    - $0 -r all
+"""
+
+if [[ $(arch) == "x86"* ]]; then local arch="amd64"; else local arch="arm64"; fi
+if [ ! -d $go_bin ]; then mkdir -p $go_bin; fi
+if [ ! -d $go_ver_home ]; then mkdir $go_ver_home; fi
+if [[ ! ":$PATH:" == *":$go_bin:"* ]]; then
+    echo "\n$go_bin is not in the \$PATH - perhaps you should add \n"
+    echo "    'export PATH=$go_bin:\$PATH' \n"
+    echo "to your shell profile script.\n"
+fi
+
+if [ -f $go_bin/go ]; then
+    local gover_current_version=$($go_bin/go version 2>&1 | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+    if $(type go > /dev/null 2>&1); then
+        local go_live_version=$(go version 2>&1 | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+    fi
+    if [[ "$gover_current_version" != "$go_live_version" ]]; then
+        echo "The version of go found first in the \$PATH is not the one managed "
+        echo "by this script. You may want to adjust your \$PATH accordingly."
+    fi
+fi
+
+# check initial argument for help
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]] || [[ "$1" == "help" ]]; then
+    echo $usage
+    return 0
+fi
+
+# remove version(s)
+if [[ "$1" == "-r" ]]; then
+    # get list of installed versions
+    V_LIST=`ls $go_ver_home |sed s/go//`
+
+    # delete specified version
+    if [[ "$2" != "" ]]; then
+        if [[ "$2" == "all" ]]; then
+            rm -rf $go_ver_home/go*
+            rm -rf $go_bin/go
+        elif [[ "${V_LIST[*]}" =~ "$2" ]]; then
+            rm -rf $go_ver_home/go$2
+        else
+            echo $usage
+        fi
+    else #choose version to delete
+        local VERSION_PICK=$(echo "$V_LIST" | fzf)
+        if [ -z "$VERSION_PICK" ]; then
+            echo $usage
+        else
+            rm -rf $go_ver_home/go$VERSION_PICK
+        fi
+    fi
+    return 0
+fi
+
+# choose go version to install
+if [ -z "$1" ]; then
+    local V_LIST=$(curl -s ${go_dl_url} |grep 'href="/dl/go' |grep $arch |grep $kernel |grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}' |sort -Vr |uniq)
+    local VERSION_PICK=$(echo "$V_LIST" | fzf)
+    if [ -z "$VERSION_PICK" ]; then
+        echo "Usage: $0 <version> (e.g. $0 1.20.1), or just run '$0' and select one from the list."
+    else
+        local VERSION=$VERSION_PICK 
+    fi
+else
+    local VERSION="$1"
+fi
+
+#download requested version if necessary
+#untar, and rename apropriately
+#delete downloaded file
+#remove old symlinks if exists
+#symlink go binary to $go_bin/go
+if [ ! -d "${go_ver_home}/go${VERSION}" ]; then
+    download_url=https://go.dev/dl/go${VERSION}.${kernel}-${arch}.tar.gz
+
+    curl -L -o $go_ver_home/go-$VERSION.tar.gz $download_url > /dev/null
+    cd $go_ver_home
+    if $(tar -zxf go-$VERSION.tar.gz > /dev/null 2>&1); then
+        mv go go${VERSION}
+        rm -f go-$VERSION.tar.gz
+        echo "downloaded from: $download_url"
+        echo "go $VERSION extracted to: $go_ver_home"
+    else
+        rm -f go-$VERSION.tar.gz
+        cd $cwd
+        echo "unable to download requested version $VERSION"
+        return 1
+    fi
+    cd $cwd
+else
+    echo ""
+    echo "go version $VERSION is already downloaded to $go_ver_home"
+    echo ""
+fi
+
+rm $go_bin/go > /dev/null 2>&1
+ln -s $go_ver_home/go${VERSION}/bin/go $go_bin/go
+echo "go ${VERSION} linked to $go_bin/go"
+
+local gover_current_version=$($go_bin/go version 2>&1 | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+if $(type go > /dev/null 2>&1); then
+    local go_live_version=$(go version 2>&1 | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+    if [[ "$gover_current_version" != "$go_live_version" ]]; then
+        echo "The version of go found first in the \$PATH at " `type go | awk '{print $3}'`
+        echo "is not the one managed by this script. You may want to adjust your \$PATH accordingly."
+        echo "system version: $go_live_version"
+        echo "$0 version: $gover_current_version"
+    fi
+    echo ""
+    echo "go version:    " `go version`
+    echo "go env GOPATH: " `go env GOPATH`
+fi
+
+# set -x

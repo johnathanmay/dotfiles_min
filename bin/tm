@@ -1,0 +1,31 @@
+#!/bin/sh
+
+SESSION=`hostname`
+if [ ! "$(tmux list-sessions | grep $SESSION)" ]
+then
+    #tmux set-environment -g 'SSH_AUTH_SOCK' ~/.ssh/ssh_auth_sock
+    #tmux setenv -g SSH_AUTH_SOCK $HOME/.ssh/ssh_auth_sock
+    #tmux set -g update-environment -r
+    tmux new-session -d -s $SESSION
+    #tmux rename-window -t 0 'root'
+    #tmux new-window -t $SESSION:1 -n 'root' 
+    tmux new-window -t $SESSION:1
+    tmux send-keys "cd ~/git" C-m
+    tmux new-window -t $SESSION:2 
+    tmux send-keys "cd ~/git" C-m
+    tmux new-window -t $SESSION:3 
+    tmux send-keys "cd ~/git" C-m
+    tmux new-window -t $SESSION:4
+    tmux send-keys "cd ~/git" C-m
+    tmux new-window -t $SESSION:5
+    tmux send-keys "cd ~/tmp" C-m
+    tmux new-window -t $SESSION:6 
+    tmux send-keys "cd ~/tmp" C-m
+    #tmux send-keys "cd ~/utils; source ~/python_venvs/utils/bin/activate" C-m
+    tmux new-window -t $SESSION:7
+    tmux select-window -t 0
+    tmux send-keys "load_ssh_keys" C-m
+    #tmux send-keys -t 'root' 'sudo -s' C-m
+fi
+tmux attach-session -t $SESSION:0
+

@@ -1,0 +1,22 @@
+[submodule "dotbot"]
+	path = dotbot
+	url = https://github.com/anishathalye/dotbot
+	ignore = dirty
+[submodule "vim/pack/vendor/start/vim-airline"]
+	path = vim/pack/vendor/start/vim-airline
+	url = https://github.com/vim-airline/vim-airline.git
+[submodule "vim/pack/vendor/start/nginx"]
+	path = vim/pack/vendor/start/nginx
+	url = https://github.com/chr4/nginx.vim.git
+[submodule "vim/pack/vendor/start/vim-terraform"]
+	path = vim/pack/vendor/start/vim-terraform
+	url = https://github.com/hashivim/vim-terraform.git
+[submodule "vim/pack/vendor/start/vim-tmux"]
+	path = vim/pack/vendor/start/vim-tmux
+	url = https://github.com/tmux-plugins/vim-tmux.git
+[submodule "vim/pack/vendor/start/vim-ps1"]
+	path = vim/pack/vendor/start/vim-ps1
+	url = https://github.com/PProvost/vim-ps1.git
+[submodule "oh-my-zsh"]
+	path = oh-my-zsh
+	url = https://github.com/ohmyzsh/ohmyzsh.git

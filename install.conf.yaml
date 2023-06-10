@@ -1,0 +1,37 @@
+# linux
+- defaults:
+    link: 
+        relink: true
+        force: false
+
+- clean: ['~']
+
+- link: 
+    ~/.bashrc:
+    ~/bin: bin
+    ~/.config/Code/User/settings.json: config/Code/User/settings.json
+    ~/.config/nvim: nvim
+    ~/.git-template:
+    ~/.oh-my-zsh: oh-my-zsh
+    ~/.p10k.zsh: 
+        path: p10k.zsh
+        force: false
+    ~/.pandoc: pandoc
+    ~/.selected-editor: selected-editor
+    ~/.tmux.conf: tmux.conf
+    ~/.vim: vim
+    ~/.vimrc: vimrc
+    ~/.zshrc: zshrc
+
+- create: 
+    - ~/.ssh: 
+        mode: 0700
+    - ~/.vim/undo-history
+    - ~/workspace:
+
+- shell: 
+    - [git submodule update --init --recursive, INSTALLING submodules]
+    - ["if [ ! -d oh-my-zsh/custom/themes/powerlevel10k ]; then git clone https://github.com/romkatv/powerlevel10k.git ./oh-my-zsh/custom/themes/powerlevel10k; else cd oh-my-zsh/custom/themes/powerlevel10k; git pull; fi", CLONING oh-my-zsh powerlevel10k theme ]
+    - ["if [ ! -d oh-my-zsh/custom/plugins/zsh-autosuggestions ]; then git clone https://github.com/zsh-users/zsh-autosuggestions.git ./oh-my-zsh/custom/plugins/zsh-autosuggestions; else cd ./oh-my-zsh/custom/plugins/zsh-autosuggestions; git pull; fi", CLONING zsh autosuggestions]
+    - ["if [ ! -d oh-my-zsh/custom/plugins/zsh-syntax-highlighting ]; then git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ./oh-my-zsh/custom/plugins/zsh-syntax-highlighting; else cd ./oh-my-zsh/custom/plugins/zsh-syntax-highlighting; git pull; fi", CLONING zsh syntax highlighting]
+    - [git submodule update --remote, UPDATING submodules]

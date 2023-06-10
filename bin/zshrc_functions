@@ -1,0 +1,386 @@
+# Alias list:
+#   - kcd:          Change namespace in current context
+#   - klaststatus:  Get status of previously terminated containers
+#   - kls:          Get list of available k8s cluster contexts
+#   - knotrunning:  Get all pods that are not in running status
+#
+# Function list:
+#   - getawscredsc: Get custom AWS credentials
+#   - getgac:       Run gimme-aws-creds for chosen Okta profile
+#   - kcc:          Show current k8s context (cluster)
+#   - kdrain:       Drain a node and ignore things you have to ignore
+#   - kf:           apply fzf menus to common kubectl commands
+#   - kget:         Get all objects associated with a resource
+#   - kgrep:        Search all objects of a certain type in a running cluster
+#   - kload:        Get all running pods on a machine
+#   - klogs:        Follow logs a specific pod
+#   - klogsprev:    Log a previous specific pod
+#   - knotready:    Get all pods that don't have all containers ready
+#   - krcenv:       Run a command on all k8s nodes in current context via SDM ssh
+#   - kuc:          Switch between k8s contexts (clusters)
+#   - kw:           Watch all objects based on app label
+#   - kwn:          Watch all nodes that match a role label 
+#   - s:            ssh to node in list of sdm resources
+#   - saltc:        SSH to salt master server for k8s context
+#   - tfver:        Specify version of terraform to use
+#   - vaultx:       Switch vault context
+
+################
+# Aliases
+################
+
+# Change namespace in current context; ie. kcd kube-system
+# recommend using kubens from kubectx instead: `brew install kubectx`
+alias kcd='kubectl config set-context $(kubectl config current-context) --namespace '
+
+# Get status of previously terminated containers
+alias klaststatus="kubectl get pod -o go-template='{{range.status.containerStatuses}}{{\"\nContainer Name: \"}}{{.name}}{{\"\r\nLastState: \"}}{{.lastState}}{{\"\n\"}}{{end}}' "
+
+# Get list of available k8s cluster contexts
+alias kls="kubectl config get-contexts"
+
+# Get all pods that are not in running status
+alias knotrunning="kubectl get pods --field-selector status.phase!=Running -o wide"
+
+
+################
+# Functions
+################
+
+# Get custom AWS credentials that aren't in the menu of getawscreds. Still
+# needs gimme-aws-creds to run and get authenticated against okta so run
+# gimme-aws-creds or getgac first
+getawscredsc () {
+    if [ $# -eq 0 ]; then
+        echo "\n    Usage: $0 AWS_PROFILE AWS_ACCOUNT_NUMBER AWS_ROLE_NAME\n"
+        return 1
+    fi
+
+    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN
+    JSONBLOB=$(aws --profile ${1} --output=json sts assume-role --role-arn arn:aws:iam::${2}:role/${3} --role-session-name ${2}.${3}.$(whoami))
+    export AWS_ACCESS_KEY_ID=$(echo $JSONBLOB | jq -r .Credentials.AccessKeyId)
+    export AWS_SECRET_ACCESS_KEY=$(echo $JSONBLOB | jq -r .Credentials.SecretAccessKey)
+    export AWS_SESSION_TOKEN=$(echo $JSONBLOB | jq -r .Credentials.SessionToken)
+    export AWS_SECURITY_TOKEN=$(echo $JSONBLOB | jq -r .Credentials.SessionToken)
+}
+
+# Run gimme-aws-creds against chosen okta profile
+getgac () {
+    if [ "$1" != "" ]; then
+        OKTA_PROFILE=$1
+    else
+        OKTA_PROFILES=$(gimme-aws-creds --list-profiles |grep '^\[' |sed -e 's/\[//' -e 's/]//')
+        if [ $(wc -l <<<$OKTA_PROFILES) -gt 1 ]; then
+            OKTA_PROFILE=${1:-$(fzf --exact +m --inline-info --height='10' --header "Which Okta profile?" <<<$OKTA_PROFILES))}
+        else
+            OKTA_PROFILE=OKTA_PROFILES
+        fi
+    fi
+    gimme-aws-creds -p $OKTA_PROFILE
+}
+
+# Show current k8s context
+kcc () {
+    kubectl config current-context
+}
+
+# Drain a node and ignore things you have to ignore
+kdrain () {
+if [ -z "$1" ]; then
+    echo "Usage: kdrain <node_name> (e.g. kdrain k3s-0.example.com"
+else
+    kubectl drain "$1" --ignore-daemonsets --delete-local-data
+    watch kubectl get po -o wide \| grep "$1"
+fi
+}
+
+# Get all objects associated with a resource
+kget () {
+    kubectl get all -l app="$1" -o wide
+}
+
+# Search all objects of a certain type in a running cluster
+kgrep () {
+    RESOURCE="$1"
+    SEARCHSTRING="$2"
+    ENV=$(kubectl config current-context)
+
+    if [ -z "$RESOURCE" ] || [ -z "$SEARCHSTRING" ]; then
+        echo "Usage: kgrep <resource_type> <search_string> (e.g. kgrep deployment limits)"
+    else
+        echo "Searching all $RESOURCE objects in $ENV for string $SEARCHSTRING"
+        echo "---"
+        for i in $(kubectl get $RESOURCE | grep -v NAME | cut -d " " -f 1); do
+            echo "Searching $i:";
+            kubectl get $RESOURCE $i -o yaml | grep $SEARCHSTRING;
+        done
+    fi
+}
+
+# Get all running pods on a machine
+kload () {
+    if [ "$1" = "" ]; then
+        echo "Usage: kload <node_name> (e.g. kload k3s-0.example.com)"
+    else
+        echo "Searching for pods living on node: $1"
+        watch kubectl get po -o wide \| grep "$1"
+    fi
+}
+
+# Follow logs a specific pod
+klogs () {
+    if [ "$1" = "" ]; then
+        echo "Usage: klogs <pod_name> (e.g. klogs nginx-77b8578cbb-5czl7)";
+    else
+        kubectl logs -f $1 $(kubectl get po $1 -o json|jq -r '.metadata.labels.app')
+    fi
+}
+
+# Log a previous specific pod
+klogsprev () {
+    kubectl logs $1 $(kubectl get po $1 -o json|jq -r '.metadata.labels.app') --previous
+}
+
+# Get all pods that don't have all containers ready
+knotready () {
+    kubectl get pods -o wide |grep -v -e "1/1" -e "2/2" -e "3/3" -e "4/4" -e "Completed"
+}
+
+# Run a command on all nodes in the currently selected k8s context using SDM ssh
+krcenv () {
+    local COMMAND_TO_RUN
+    if [ $# != 1 ]; then
+        echo "Enter the command you wish to run in quotes following $0"
+        echo ""
+        echo "  example: $0 \"df -h |grep docker\""
+        return 0
+    fi
+    COMMAND_TO_RUN="$1"
+    for role in `for r in $(kubectl get nodes -L role --no-headers |awk '{print $6}'); do echo $r; done |sort |uniq`; do echo $role; for node in $(kubectl get nodes --sort-by={.metadata.creationTimestamp} -L role --no-headers -l role="$role" |awk '{print $1}'); do sdm ssh $node "$COMMAND_TO_RUN"; done; done
+}
+
+# Switch between k8s clusters
+kuc() {
+    CURRENT=$(kubectl config current-context)
+    AVAILABLE=$(kubectl config get-contexts --no-headers -o name)
+    if [ -n "$1" ]; then
+        FILTERED=$(echo "$AVAILABLE" | grep "$(tr '[[:upper:]]' '[[:lower:]]' <<<"$1")" | grep -E "^${CURRENT}$" -v)
+        NUMBER_RETURNED=$(awk '{print $1}' <<<$(wc -l <<<$FILTERED))
+        if [ $NUMBER_RETURNED -eq 1 ]; then
+            PICKLES=${FILTERED}
+        elif [ $NUMBER_RETURNED -gt 1 ]; then
+            PICKLES=$(fzf +m --inline-info --height='10' --header "Choose which one you meant" <<<"${FILTERED}")
+        else
+            echo "That is not valid."
+        fi
+    else
+        PICKLES=$(fzf +m --inline-info --height='10' --header "Choose which Context" <<<"$AVAILABLE")
+    fi
+    if [ "$PICKLES" = "$CURRENT" ]; then
+        echo "You are already set to $CURRENT"
+    elif [ "$PICKLES" = "" ]; then
+        echo "Nothing was chosen"
+    else
+        kubectl config use-context ${PICKLES}
+    fi
+}
+
+# Watch all objects based on app label. These 
+# functions require the linux/mac 'watch' command be installed: 
+# brew install watch
+kw () {
+    if [ "$1" = "" ]; then
+        echo "Usage: kw <app> (e.g. kw nginx)";
+    else
+        watch kubectl get all -l app="$1" -o wide
+    fi
+}
+
+# Watch all nodes that match a role label
+kwn () {
+    if [ "$1" = "" ]; then
+        echo "Usage: kwn <node_role> (e.g. kwn app, kwn web)";
+    else
+        watch kubectl get nodes -l role="$1"
+    fi
+}
+
+# apply fzf menus to common kubectl commands
+kf () {
+    local KF_OBJECT_TYPE
+    KF_ACTION=${1:-$(fzf <<< $(tr ' ' '\n' <<< "delete describe edit exec get logs"))}
+    [ "$?" -ne 0 ] && return
+    if [ "$KF_ACTION" = "logs" ] || [ "$KF_ACTION" = "exec" ]; then
+        KF_OBJECT_TYPE="pod"
+    fi
+    if [ -z "$KF_OBJECT_TYPE" ]; then
+        KF_OBJECT_TYPE=${2:-$(fzf <<< $(tr ' ' '\n' <<< "pod deployment statefulset daemonsets node all"))}
+        [ "$?" -ne 0 ] && return
+    fi
+    case "$KF_OBJECT_TYPE" in
+        (all) KF_LABEL=$(kubectl get deploy,ds,sts -A -o json | jq -r '.items[].metadata.name' | fzf)
+            [ "$?" -ne 0 ] && return
+            kubectl get $KF_OBJECT_TYPE -A -l app=$KF_LABEL -o wide && return ;;
+        (node) KF_OBJECT=$(kubectl get $KF_OBJECT_TYPE -o wide --no-headers | fzf)
+            [ "$?" -ne 0 ] && return
+            KF_OBJECT=$(echo $KF_OBJECT | awk '{print $1}')    ;;
+        (*) KF_OBJECT=$(kubectl get $KF_OBJECT_TYPE -A -o wide --no-headers | fzf)
+            [ "$?" -ne 0 ] && return
+            KF_OBJECT=$(echo $KF_OBJECT | awk '{print $2}')    ;;
+    esac
+    KF_NAMESPACE=$(kubectl get $KF_OBJECT_TYPE -A -o wide --no-headers | grep $KF_OBJECT | awk '{print $1}')
+    case "$KF_ACTION" in
+        (exec) kubectl $KF_ACTION -it -n $KF_NAMESPACE $KF_OBJECT sh ;;
+        (get) kubectl $KF_ACTION $KF_OBJECT_TYPE -n $KF_NAMESPACE $KF_OBJECT -o wide --show-labels ;;
+        (logs) KF_CONTAINER=$(kubectl get pod -n $KF_NAMESPACE $KF_OBJECT -o json | jq -r '.metadata.labels.app')
+            [ "$KF_CONTAINER" = "null" ] && KF_CONTAINER=""
+            kubectl $KF_ACTION -n $KF_NAMESPACE -f $KF_OBJECT $KF_CONTAINER ;;
+        (*) kubectl $KF_ACTION $KF_OBJECT_TYPE -n $KF_NAMESPACE $KF_OBJECT ;;
+    esac
+}
+
+# ssh to node in list of sdm resources
+s () {
+    if [ -z "$1" ]; then
+        sdm ssh $(sdm status | fzf --header-lines=0 --cycle --exact | awk '{ print $1 }')
+    else
+        sdm ssh $1
+    fi
+}
+
+# SSH to salt master server for k8s context
+saltc () {
+    SALT_MASTER=$(kubectl get node -l role=salt-master -o custom-columns='NAME:metadata.name' --no-headers | head -n 1)
+    echo "Connecting to $SALT_MASTER"
+    ssh -o "UserKnownHostsFile /dev/null" -o "StrictHostKeyChecking=no" -q "$SALT_MASTER" -t 'sudo docker exec -it salt-master bash'
+}
+
+# Select version of terraform to use
+# This function will download terraform versions as needed and store them in 
+# ~/.tf_versions. It makes sure $HOME/bin is in the $PATH variable and 
+# symlinks the specified version there. This works on Linux systems also.
+tfver () {
+    #get architecture to download appropriate binary and setup local paths as needed
+    local kernel=$(uname | tr '[:upper:]' '[:lower:]')
+    if [[ $(arch) == "x86"* ]]; then local arch="amd64"; else local arch="arm64"; fi
+    local tf_home="$HOME/.tf_versions"
+    if [ ! -d $HOME/bin ]; then mkdir $HOME/bin; fi
+    if [ ! -d $tf_home ]; then mkdir $tf_home; fi
+    if [[ ! ":$PATH:" == *":$HOME/bin:"* ]]; then export PATH=$HOME/bin:$PATH; fi
+
+    #generate menu of versions to choose from if version isn't specified
+    __nL() {
+        echo -en "\033[1K"
+        echo -en "\033[u"
+        echo -n "$@"
+    }
+    if $(which terraform > /dev/null); then
+        local tf_current_version=$(terraform version 2>&1 | grep -Eo 'Terraform v\S+' | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+    else
+        local tf_current_version="NOT_EXIST"
+    fi
+    if [ -z "$1" ]; then
+        local V_LIST=$(curl -s https://releases.hashicorp.com/terraform/ | grep -Eo 'terraform_[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}<' | sed "s/<//g" | sed "s/terraform_//g")
+        local VERSION_PICK=$(echo "$V_LIST" | fzf)
+        if [ -z "$VERSION_PICK" ]; then
+            echo "Usage: tfver <version> (e.g. tfver 0.13.1), or just run 'tfver' and select one from the list."
+        else
+            local VERSION=$VERSION_PICK
+        fi
+    else
+        local VERSION=$1
+    fi
+
+    #download requested version if necessary
+    #unzip, chmod, and rename apropriately
+    #delete downloaded .zip
+    #remove old symlinks if exists
+    #symlink terraform version into $HOME/bin/terraform
+    if ! [ -z "$VERSION" ]; then
+        if [ "$tf_current_version" != "$VERSION" ]; then
+            #check if requested version is already downloaded
+            if [ -f "$tf_home/terraform_$VERSION" ]; then 
+                local STEPS=0
+                #echo -en "\033[s"
+                echo "Step $((++STEPS))/5 - $tf_current_version is the current version - switching to $VERSION" &&
+                echo "Step $((++STEPS))/5 - New version is already downloaded" && 
+                echo "Step $((++STEPS))/5 - Removing old symlink" && [ -L ~/bin/terraform ] && rm ~/bin/terraform
+                echo "Step $((++STEPS))/5 - Adding new symlink." && ln -s $tf_home/terraform_$VERSION ~/bin/terraform
+                NEW_VERSION=$(terraform version 2>&1 | grep -Eo 'Terraform v\S+' | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+                echo "Step $((++STEPS))/5 - $NEW_VERSION has been installed and replaced your previous, which was $tf_current_version."
+                echo "\nYou should be able to use terraform again now."
+            else 
+                local STEPS=0
+                #echo -en "\033[s"
+                echo "Step $((++STEPS))/9 - $tf_current_version is the current version - switching to ${VERSION}"
+                echo "Step $((++STEPS))/9 - Downloading https://releases.hashicorp.com/terraform/${VERSION}/terraform_${VERSION}_${kernel}_${arch}.zip" && curl -s -L -o $tf_home/terraform-$VERSION.zip https://releases.hashicorp.com/terraform/${VERSION}/terraform_${VERSION}_${kernel}_${arch}.zip > /dev/null
+                echo "Step $((++STEPS))/9 - Unzipping the file." && unzip -o $tf_home/terraform-$VERSION.zip -d $tf_home/ > /dev/null
+                echo "Step $((++STEPS))/9 - Removing the Zip" && rm $tf_home/terraform-$VERSION.zip
+                echo "Step $((++STEPS))/9 - Appending version to terraform filename" && mv $tf_home/terraform{,_$VERSION}
+                echo "Step $((++STEPS))/9 - Chmod to make it executable." && chmod +x $tf_home/terraform_$VERSION
+                echo "Step $((++STEPS))/9 - Removing old symlink" && [ -L ~/bin/terraform ] && rm ~/bin/terraform
+                echo "Step $((++STEPS))/9 - Adding new symlink." && ln -s $tf_home/terraform_$VERSION ~/bin/terraform
+                local NEW_VERSION=$(terraform version 2>&1 | grep -Eo 'Terraform v\S+' | grep -Eo '[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}')
+                echo "Step $((++STEPS))/9 - $NEW_VERSION has been installed and replaced your previous, which was $tf_current_version."
+                echo "\nYou should be able to use terraform again now."
+            fi
+        else
+            echo "You are already running version $tf_current_version."
+        fi
+    fi
+}
+
+# switch vault context
+# force renewal by running 'vaultx <env> renew'
+vaultx() {
+    [ ! -d ~/.vault_tokens ] && mkdir ~/.vault_tokens
+    local ADDRESS CONTEXT_PICKER=$(tr '[[:upper:]]' '[[:lower:]]' <<<${1:=$(fzf +m --inline-info --height='10' --header "Choose Which Environment" <<<$(tr ' ' '\n' <<<"Dev Staging Production"))})
+    if [ -n "$CONTEXT_PICKER" ]; then
+        case "$CONTEXT_PICKER" in
+            dev* | d) ADDRESS="dev-vault.example.com" VCONTEXT="dev";;
+            st* | s) ADDRESS="staging-vault.example.com" VCONTEXT="staging";;
+            prod* | p) ADDRESS="production-vault.example.com" VCONTEXT="production" ;;
+            *) echo "$CONTEXT_PICKER is not a valid choice." ;;
+        esac
+        
+        function renew_token() {
+            printf '%0.1s' \-{1..60}
+            echo "\n- Enter password when prompted and check MFA device for prompt(s)"
+            vault login -method=okta username=$(whoami)
+            if [ $? -eq 0 ]; then
+                cat ~/.vault-token > ~/.vault_tokens/$VCONTEXT.env
+            fi
+        }
+
+        if [ "$VAULT_ADDR" = "https://${ADDRESS}" ]; then
+            printf '%0.1s' \-{1..60}
+            echo "\n - Kept VAULT_ADDR as $VAULT_ADDR"
+        else
+            export VAULT_ADDR="https://${ADDRESS}"
+            #bash -c "echo $(printf '%0.1s' \-{1..60})"
+            printf '%0.1s' \-{1..60}
+            echo "\n - Vault address set to $VAULT_ADDR"
+        fi
+        
+        # renew if applicable
+        if [ "$2" = "renew" ]; then
+            renew_token
+            return $?
+        fi
+        
+        # copy previous token to ~/.vault-token
+        if [ -f ~/.vault_tokens/$VCONTEXT.env ]; then
+            cat ~/.vault_tokens/$VCONTEXT.env > ~/.vault-token
+        fi
+
+        # check if token works
+        error=$(vault list secret 2>/dev/null)
+        if [ $? -gt 0 ]; then
+            renew_token
+        else
+            VAULT_TTL=$(vault token lookup |grep ^ttl |awk '{print $2}')
+            echo " - Token still valid for $VAULT_TTL (per 'vault token lookup')"
+            echo "   Run '$0 $CONTEXT_PICKER renew' to renew"
+        fi
+    fi
+}
